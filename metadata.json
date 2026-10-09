@@ -1,0 +1,6 @@
+{
+  "name": "บทเรียนสังคมศึกษา ม.1 ส21103: พฤติกรรมการบริโภค",
+  "description": "สื่อการเรียนรู้อินเทอร์แอคทีฟ วิชาสังคมศึกษา ม.1 รหัส ส21103 เรื่อง พฤติกรรมการบริโภค พร้อมเสียงบรรยาย TTS และแบบทดสอบวัดผล",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
