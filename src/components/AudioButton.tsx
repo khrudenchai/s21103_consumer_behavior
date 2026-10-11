@@ -34,6 +34,7 @@ export const AudioButton: React.FC<AudioButtonProps> = ({
   if (variant === 'compact') {
     return (
       <button
+        type="button"
         onClick={handleToggle}
         aria-label={isPlaying ? 'หยุดเสียงบรรยาย' : `ฟังเสียงบรรยาย: ${label}`}
         title={isPlaying ? 'กดเพื่อหยุดฟัง' : 'กดเพื่อฟังเสียงบรรยาย'}
@@ -60,6 +61,7 @@ export const AudioButton: React.FC<AudioButtonProps> = ({
 
   return (
     <button
+      type="button"
       onClick={handleToggle}
       aria-label={isPlaying ? 'หยุดเสียงบรรยาย' : `ฟังเสียงบรรยาย: ${label}`}
       className={`inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer select-none active:scale-95 focus-visible:ring-2 focus-visible:ring-offset-2 ${
