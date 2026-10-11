@@ -1,6 +1,10 @@
 /**
- * Text-to-Speech (TTS) Service using Web Speech API (SpeechSynthesis)
- * Focused on Thai language (th-TH) support for middle school students
+ * Text-to-Speech (TTS) Service for Thai Language (th-TH)
+ * Supports:
+ * 1. Native SpeechSynthesis with strict Thai voice detection
+ * 2. Automatic Fallback to Google Translate TTS Audio (100% natural Thai voice on any device)
+ * 3. Text Chunking for long passages to avoid browser audio cutoffs
+ * 4. Immediate cancellation & responsive state management
  */
 
 class TTSManager {
@@ -10,73 +14,75 @@ class TTSManager {
   private listeners: Set<(activeId: string | null, isLoading: boolean) => void> = new Set();
   private isLoading = false;
   private voices: SpeechSynthesisVoice[] = [];
+  private sessionId = 0; // Incremented on stop to invalidate pending chunk callbacks
 
   constructor() {
     this.initVoiceListener();
   }
 
   /**
-   * รองรับการโหลดเสียงของเบราว์เซอร์: เพิ่ม Event Listener window.speechSynthesis.onvoiceschanged
-   * เพื่อดึงรายการเสียงให้พร้อมใช้งานเสมอ
+   * รองรับการโหลดเสียงของเบราว์เซอร์: ดึงรายการเสียงทันทีและดักฟัง onvoiceschanged
    */
   private initVoiceListener() {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (typeof window === 'undefined') return;
 
-    // โหลดเสียงครั้งแรก
-    this.loadVoices();
-
-    // ตรวจจับเมื่อเบราว์เซอร์โหลดรายการเสียงเสร็จสิ้น
-    window.speechSynthesis.onvoiceschanged = () => {
+    if ('speechSynthesis' in window) {
       this.loadVoices();
-    };
 
-    if (window.speechSynthesis.addEventListener) {
-      window.speechSynthesis.addEventListener('voiceschanged', () => {
+      window.speechSynthesis.onvoiceschanged = () => {
         this.loadVoices();
-      });
+      };
+
+      if (window.speechSynthesis.addEventListener) {
+        window.speechSynthesis.addEventListener('voiceschanged', () => {
+          this.loadVoices();
+        });
+      }
     }
   }
 
   private loadVoices() {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    this.voices = window.speechSynthesis.getVoices();
+    try {
+      this.voices = window.speechSynthesis.getVoices() || [];
+    } catch {
+      this.voices = [];
+    }
   }
 
   /**
-   * ค้นหาเสียงภาษาไทยจาก window.speechSynthesis.getVoices()
-   * โดยมองหา voice ที่มี lang.includes('th') หรือ lang === 'th-TH'
+   * ค้นหา Voice ภาษาไทยอย่างเคร่งครัด (lang เริ่มต้นด้วย 'th' หรือชื่อมีระบุ Thai)
+   * หากไม่มี จะคืนค่า null เพื่อให้ระบบ Fallback ไปใช้ Google TTS Audio ทันที
    */
   public getThaiVoice(): SpeechSynthesisVoice | null {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
 
     if (!this.voices || this.voices.length === 0) {
-      this.voices = window.speechSynthesis.getVoices();
+      this.loadVoices();
     }
 
-    // 1. ลำดับแรก: หาภาษา th-TH ตรงตัว
-    const exactThai = this.voices.find(
-      (v) =>
-        v.lang === 'th-TH' ||
-        v.lang.toLowerCase() === 'th-th' ||
-        v.lang.replace('_', '-').toLowerCase() === 'th-th'
-    );
+    if (!this.voices || this.voices.length === 0) return null;
+
+    // 1. ค้นหารหัสภาษา 'th-TH' ตรงตัว
+    const exactThai = this.voices.find((v) => {
+      const l = (v.lang || '').toLowerCase().replace('_', '-');
+      return l === 'th-th' || l === 'th';
+    });
     if (exactThai) return exactThai;
 
-    // 2. ลำดับสอง: หาเสียงที่มีรหัสภาษาประกอบด้วย 'th'
-    const partialThai = this.voices.find(
-      (v) =>
-        v.lang.toLowerCase().includes('th') ||
-        v.lang.toLowerCase().startsWith('th')
-    );
-    if (partialThai) return partialThai;
+    // 2. ค้นหาภาษาที่ขึ้นต้นด้วย 'th'
+    const startsWithTh = this.voices.find((v) => {
+      const l = (v.lang || '').toLowerCase();
+      return l.startsWith('th-') || l.startsWith('th');
+    });
+    if (startsWithTh) return startsWithTh;
 
-    // 3. ลำดับสาม: ค้นหาจากชื่อเสียงที่มีคำว่า thai หรือ ไทย
-    const nameThai = this.voices.find(
-      (v) =>
-        v.name.toLowerCase().includes('thai') ||
-        v.name.includes('ไทย')
-    );
-    if (nameThai) return nameThai;
+    // 3. ค้นหาจากชื่อเสียงที่มีคำว่า Thai หรือ ไทย
+    const namedThai = this.voices.find((v) => {
+      const n = (v.name || '').toLowerCase();
+      return n.includes('thai') || n.includes('ไทย') || n.includes('kanya') || n.includes('narisa');
+    });
+    if (namedThai) return namedThai;
 
     return null;
   }
@@ -94,17 +100,34 @@ class TTSManager {
   }
 
   /**
-   * สั่งหยุดเสียงบรรยายทั้งหมดและยกเลิกคิว
+   * เมื่อกดปุ่มอ่านเสียงใหม่ ให้หยุดเสียงเก่าทันที (speechSynthesis.cancel() หรือหยุด Audio เดิม)
    */
   public stop() {
+    this.sessionId++; // ยกเลิกคิวข้อความที่ค้างอยู่ทั้งหมด
+
+    // หยุด HTMLAudioElement
     if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio.currentTime = 0;
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+        this.currentAudio.onended = null;
+        this.currentAudio.onerror = null;
+        this.currentAudio.onplay = null;
+        this.currentAudio.removeAttribute('src');
+        this.currentAudio.load();
+      } catch (e) {
+        console.warn('Error stopping audio:', e);
+      }
       this.currentAudio = null;
     }
 
+    // หยุด SpeechSynthesis
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {
+        console.warn('Error cancelling speech synthesis:', e);
+      }
       this.currentUtterance = null;
     }
 
@@ -114,104 +137,242 @@ class TTSManager {
   }
 
   /**
-   * ฟังก์ชันอ่านเสียงบรรยายภาษาไทย
+   * ตัดแบ่งข้อความยาวๆ (Text Chunking) ตามเครื่องหมายวรรคตอนและช่องว่าง
+   * ไม่ให้เกิน ~140 ตัวอักษร เพื่อรองรับทั้ง Google TTS URL และแก้บั๊ก Web Speech API ตัดเสียง
+   */
+  private splitTextIntoChunks(text: string, maxLen = 140): string[] {
+    const cleaned = text
+      .replace(/[#*`_~]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleaned) return [];
+    if (cleaned.length <= maxLen) return [cleaned];
+
+    // แบ่งตามเครื่องหมายวรรคตอน หรือช่องว่าง
+    const sentences = cleaned.split(/([.\n!?؛;,:]|\s{2,}|\sและ\s|\sหรือ\s)/g).filter(Boolean);
+    const chunks: string[] = [];
+    let current = '';
+
+    for (const part of sentences) {
+      if ((current + ' ' + part).trim().length <= maxLen) {
+        current = (current + ' ' + part).trim();
+      } else {
+        if (current) chunks.push(current);
+        // ถ้าท่อนนี้ยาวเกิน maxLen ให้ตัดด้วยช่องว่าง
+        if (part.length > maxLen) {
+          const words = part.split(' ').filter(Boolean);
+          let subCurrent = '';
+          for (const w of words) {
+            if ((subCurrent + ' ' + w).trim().length <= maxLen) {
+              subCurrent = (subCurrent + ' ' + w).trim();
+            } else {
+              if (subCurrent) chunks.push(subCurrent);
+              if (w.length > maxLen) {
+                // ซอยย่อยตามความยาว
+                for (let i = 0; i < w.length; i += maxLen) {
+                  chunks.push(w.slice(i, i + maxLen));
+                }
+                subCurrent = '';
+              } else {
+                subCurrent = w;
+              }
+            }
+          }
+          if (subCurrent) chunks.push(subCurrent);
+          current = '';
+        } else {
+          current = part;
+        }
+      }
+    }
+
+    if (current) chunks.push(current);
+    return chunks.filter((c) => c.trim().length > 0);
+  }
+
+  /**
+   * ฟังก์ชันหลักสำหรับอ่านเสียงบรรยาย
    */
   public speak(id: string, text?: string | null) {
-    // หากกดปุ่มเดิมที่กำลังเล่นอยู่ ให้หยุดเสียง (Toggle Stop)
+    // หากกดปุ่มเดิมที่กำลังอ่านอยู่ ให้หยุดเสียง (Toggle Stop)
     if (this.activeId === id) {
       this.stop();
       return;
     }
 
-    // ก่อนเริ่มอ่านทุกครั้ง ให้สั่ง window.speechSynthesis.cancel() เพื่อล้างคิวเสียงเก่าก่อน
+    // หยุดเสียงเก่าทันทีก่อนเริ่มอ่านเสียงใหม่
     this.stop();
 
+    const currentSession = this.sessionId;
     this.activeId = id;
     this.isLoading = true;
     this.notify();
 
-    // ตรวจสอบข้อความก่อนอ่าน หากข้อความว่างเปล่าหรือเป็น null ให้มีข้อความสำรองอ่านแทน
-    let cleanText = (text || '')
-      .replace(/[#*`_~]/g, '')
+    // ตรวจสอบว่าปุ่มส่งข้อความเข้ามา ไม่ให้เป็นข้อความว่างเปล่า
+    let validText = (text || '')
+      .replace(/[#*`_~]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
 
-    if (!cleanText) {
-      cleanText = 'บทเรียนวิชาสังคมศึกษา รหัส ส 21103 เรื่อง พฤติกรรมการบริโภค สำหรับนักเรียนชั้นมัธยมศึกษาปีที่ 1';
+    if (!validText) {
+      validText = 'บทเรียนวิชาสังคมศึกษา รหัส ส 21103 เรื่อง พฤติกรรมการบริโภค สำหรับนักเรียนชั้นมัธยมศึกษาปีที่ 1';
     }
 
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      console.warn('เบราว์เซอร์ไม่รองรับ Web Speech API');
-      this.activeId = null;
-      this.isLoading = false;
-      this.notify();
+    // ตัดแบ่งข้อความเป็นท่อนสั้นๆ
+    const chunks = this.splitTextIntoChunks(validText, 140);
+    if (chunks.length === 0) {
+      this.stop();
       return;
     }
 
-    try {
-      // ล้างคิวเสียงเก่าก่อนทุกครั้ง
-      window.speechSynthesis.cancel();
+    // ตรวจสอบว่าเบราว์เซอร์มี Native Voice ภาษาไทยหรือไม่
+    const thaiVoice = this.getThaiVoice();
 
-      // ปลดสถานะค้าง (paused) หากมี
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-
-      // บังคับใช้เสียงภาษาไทย (th-TH)
-      utterance.lang = 'th-TH';
-      utterance.rate = 0.95; // ความเร็วพอเหมาะ ชัดถ้อยชัดคำสำหรับนักเรียน
-      utterance.pitch = 1.0;
-
-      // ค้นหาเสียงภาษาไทยจาก window.speechSynthesis.getVoices()
-      const thaiVoice = this.getThaiVoice();
-      if (thaiVoice) {
-        utterance.voice = thaiVoice;
-      }
-
-      utterance.onstart = () => {
-        if (this.activeId === id) {
-          this.isLoading = false;
-          this.notify();
-        }
-      };
-
-      utterance.onend = () => {
-        if (this.activeId === id) {
-          this.activeId = null;
-          this.currentUtterance = null;
-          this.isLoading = false;
-          this.notify();
-        }
-      };
-
-      utterance.onerror = (event) => {
-        // ไม่แจ้งเตือน error หากเกิดจากการกดยกเลิกหรือเปลี่ยนข้อความ
-        if (event.error !== 'interrupted' && event.error !== 'canceled') {
-          console.warn('SpeechSynthesis error:', event);
-        }
-        if (this.activeId === id) {
-          this.activeId = null;
-          this.currentUtterance = null;
-          this.isLoading = false;
-          this.notify();
-        }
-      };
-
-      // เก็บ utterance ไว้ใน property เพื่อป้องกันการถูก Garbage Collector ลบทิ้งกลางคันใน Chrome
-      this.currentUtterance = utterance;
-
-      this.isLoading = false;
-      this.notify();
-
-      window.speechSynthesis.speak(utterance);
-    } catch (err) {
-      console.error('Error starting SpeechSynthesis:', err);
-      this.activeId = null;
-      this.isLoading = false;
-      this.notify();
+    if (thaiVoice && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      // มีเสียงภาษาไทยแท้ในระบบ -> ใช้งาน SpeechSynthesis
+      this.playSpeechSynthesisChunks(id, chunks, thaiVoice, currentSession);
+    } else {
+      // เครื่องไม่มีเสียงภาษาไทย -> Fallback ไปใช้ Google Translate TTS Audio 100% ภาษาไทยชัดเจน
+      this.playGoogleTTSAudioChunks(id, chunks, currentSession);
     }
+  }
+
+  /**
+   * เล่นข้อความด้วย SpeechSynthesis (Native Web Speech API)
+   */
+  private playSpeechSynthesisChunks(
+    id: string,
+    chunks: string[],
+    voice: SpeechSynthesisVoice,
+    session: number
+  ) {
+    let index = 0;
+
+    const playNext = () => {
+      if (this.sessionId !== session || this.activeId !== id) return;
+
+      if (index >= chunks.length) {
+        // เล่นจบครบทุกท่อน
+        this.stop();
+        return;
+      }
+
+      const chunkText = chunks[index];
+      index++;
+
+      try {
+        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+
+        const utterance = new SpeechSynthesisUtterance(chunkText);
+        utterance.lang = 'th-TH';
+        utterance.voice = voice;
+        utterance.rate = 0.95; // จังหวะชัดเจนสำหรับนักเรียน
+        utterance.pitch = 1.0;
+
+        utterance.onstart = () => {
+          if (this.sessionId === session && this.activeId === id) {
+            this.isLoading = false;
+            this.notify();
+          }
+        };
+
+        utterance.onend = () => {
+          if (this.sessionId === session && this.activeId === id) {
+            playNext();
+          }
+        };
+
+        utterance.onerror = (e) => {
+          if (e.error !== 'interrupted' && e.error !== 'canceled') {
+            console.warn('SpeechSynthesis chunk error, falling back to Google TTS:', e);
+            // สลับไปเล่น Google TTS Audio แทนเพื่อความต่อเนื่อง
+            const remaining = chunks.slice(index - 1);
+            this.playGoogleTTSAudioChunks(id, remaining, session);
+          }
+        };
+
+        this.currentUtterance = utterance;
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn('Error in speechSynthesis.speak, falling back to audio:', err);
+        const remaining = chunks.slice(index - 1);
+        this.playGoogleTTSAudioChunks(id, remaining, session);
+      }
+    };
+
+    playNext();
+  }
+
+  /**
+   * Fallback: เล่นเสียงภาษาไทยผ่าน Google Translate TTS URL
+   * เล่นผ่าน new Audio() ให้เสียงภาษาไทยคมชัด 100% ทุกเครื่องโดยไม่ต้องติดตั้ง voice pack
+   */
+  private playGoogleTTSAudioChunks(id: string, chunks: string[], session: number) {
+    let index = 0;
+
+    const playNextAudio = () => {
+      if (this.sessionId !== session || this.activeId !== id) return;
+
+      if (index >= chunks.length) {
+        // เล่นจบครบทุกท่อน
+        this.stop();
+        return;
+      }
+
+      const chunkText = chunks[index];
+      index++;
+
+      try {
+        // Google Translate TTS URL (ภาษาไทย tl=th)
+        const encodedText = encodeURIComponent(chunkText);
+        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=th&client=tw-ob&q=${encodedText}`;
+
+        const audio = new Audio(audioUrl);
+        this.currentAudio = audio;
+
+        audio.onplay = () => {
+          if (this.sessionId === session && this.activeId === id) {
+            this.isLoading = false;
+            this.notify();
+          }
+        };
+
+        audio.onended = () => {
+          if (this.sessionId === session && this.activeId === id) {
+            playNextAudio();
+          }
+        };
+
+        audio.onerror = (err) => {
+          console.warn('Audio chunk error:', err);
+          // หากท่อนนี้โหลดไม่ได้ ให้พยายามเล่นท่อนถัดไป
+          if (this.sessionId === session && this.activeId === id) {
+            if (index < chunks.length) {
+              playNextAudio();
+            } else {
+              this.stop();
+            }
+          }
+        };
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn('Playback error (e.g. autoplay restriction):', err);
+            this.stop();
+          });
+        }
+      } catch (err) {
+        console.error('Failed to play TTS audio chunk:', err);
+        this.stop();
+      }
+    };
+
+    playNextAudio();
   }
 
   public getActiveId(): string | null {
