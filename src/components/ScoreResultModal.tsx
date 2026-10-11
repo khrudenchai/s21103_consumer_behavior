@@ -58,7 +58,7 @@ export const ScoreResultModal: React.FC<ScoreResultModalProps> = ({
     const textToCopy = `📋 รายงานผลการทำแบบทดสอบวิชาสังคมศึกษา
 รหัสวิชา: ${LESSON_METADATA.courseCode} ${LESSON_METADATA.courseName}
 หน่วยการเรียนรู้: ${LESSON_METADATA.unitTitle}
-ตัวชี้วัด: ส 3.1 ม.1/0 (วิเคราะห์ค่านิยมและพฤติกรรมการบริโภค)
+ตัวชี้วัด: ตัวชี้วัด ส.3.1 ม.1/2 (วิเคราะห์ค่านิยมและพฤติกรรมการบริโภค)
 ---------------------------
 ชื่อ-นามสกุล: ${student.fullName}
 ชั้น: ${student.gradeClass} เลขที่: ${student.studentNo}

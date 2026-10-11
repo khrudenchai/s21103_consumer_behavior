@@ -9,7 +9,7 @@ interface HeroProps {
 }
 
 export const Hero: React.FC<HeroProps> = ({ onNavigateTopic, onStartQuiz }) => {
-  const heroIntroSpeech = `ยินดีต้อนรับสู่บทเรียนวิชาสังคมศึกษา รหัส ส 21103 ชั้นมัธยมศึกษาปีที่ 1 เรื่อง พฤติกรรมการบริโภค ตัวชี้วัด ส 3.1 ม.1/0 วิเคราะห์ค่านิยมและพฤติกรรมการบริโภคของคนในสังคมซึ่งมีผลต่อเศรษฐกิจของชุมชนและประเทศ บทเรียนนี้มี 4 เรื่องย่อย พร้อมเสียงบรรยายและแบบทดสอบท้ายบทเรียน ขอให้นักเรียนทุกคนตั้งใจเรียนรู้ไปด้วยกันครับ`;
+  const heroIntroSpeech = `ยินดีต้อนรับสู่บทเรียนวิชาสังคมศึกษา รหัส ส 21103 ชั้นมัธยมศึกษาปีที่ 1 เรื่อง พฤติกรรมการบริโภค ตัวชี้วัด ส.3.1 ม.1/2 วิเคราะห์ค่านิยมและพฤติกรรมการบริโภคของคนในสังคมซึ่งมีผลต่อเศรษฐกิจของชุมชนและประเทศ บทเรียนนี้มี 4 เรื่องย่อย พร้อมเสียงบรรยายและแบบทดสอบท้ายบทเรียน ขอให้นักเรียนทุกคนตั้งใจเรียนรู้ไปด้วยกันครับ`;
 
   return (
     <section id="hero" className="pt-6 pb-12 sm:pt-10 sm:pb-16 bg-gradient-to-b from-amber-50/60 via-orange-50/30 to-transparent">
@@ -29,7 +29,7 @@ export const Hero: React.FC<HeroProps> = ({ onNavigateTopic, onStartQuiz }) => {
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 text-xs font-semibold text-amber-800 bg-amber-100/80 border border-amber-200/80 px-3 py-1 rounded-full">
                 <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>ตัวชี้วัด ส 3.1 ม.1/0 (ม.1/2)</span>
+                <span>ตัวชี้วัด ส.3.1 ม.1/2</span>
               </div>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight">
                 พฤติกรรมการบริโภค

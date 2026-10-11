@@ -166,7 +166,7 @@ export const InteractiveSimulators: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: Community Money Flow Simulator (ส 3.1 ม.1/0) */}
+          {/* Card 2: Community Money Flow Simulator (ตัวชี้วัด ส.3.1 ม.1/2) */}
           <div className="bg-white rounded-2xl border border-amber-200 p-6 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -184,7 +184,7 @@ export const InteractiveSimulators: React.FC = () => {
               </div>
 
               <p className="text-xs text-slate-500 mt-2">
-                ทดลองเลือกวิธีใช้เงิน 100 บาท เพื่อสังเกตผลกระทบตามตัวชี้วัด ส 3.1 ม.1/0
+                ทดลองเลือกวิธีใช้เงิน 100 บาท เพื่อสังเกตผลกระทบตามตัวชี้วัด ส.3.1 ม.1/2
               </p>
 
               {/* Segmented Choice Buttons */}
@@ -271,7 +271,7 @@ export const InteractiveSimulators: React.FC = () => {
 
             <div className="mt-6 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
               <span>การประยุกต์ใช้: ปรัชญาเศรษฐกิจพอเพียง</span>
-              <span>ตัวชี้วัด ส 3.1 ม.1/0</span>
+              <span>ตัวชี้วัด ส.3.1 ม.1/2</span>
             </div>
           </div>
         </div>
